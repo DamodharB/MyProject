@@ -1,7 +1,7 @@
 ## Battula Damodhar
 ## MovieLens Project 
 ## HarvardX: PH125.9x - Capstone Project
-## https://github.com/DamodharB/
+## https://github.com/DamodharB/MyProject
 
 #################################################
 # MovieLens Rating Prediction Project Code 
