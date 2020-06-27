@@ -71,7 +71,7 @@ convert_magic <- function(obj,types){
 ```
 This report has been created thanks to an automatised report (R markdown).
 The whole code and work can be found at : 
-https://github.com/DamodharB/MyProject/tree/master/Capstone_Project/
+https://github.com/DamodharB/MyProject/tree/master/Capstone_Project/Heart_Disease_Project
 
 Our work is broken down into several parts :  
 1. Data pre-processing  
@@ -81,6 +81,7 @@ Our work is broken down into several parts :
   4.1  Data cleaning  
   4.2  Data analysis  
   4.3  Modelling Approach  
+  
 
 
 # Data pre-processing
