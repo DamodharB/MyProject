@@ -1,0 +1,491 @@
+---
+title: "HarvardX: PH125.9x Data Science  \n   Heart Disease Prediction"
+author: "Battula Damodhar"
+date: "June 26, 2020"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+---
+
+
+# Overview
+
+This project is related to the Heart disease prediction of the HervardX: PH125.9x Data Science: Capstone course. The present report start with a general idea of the project and by representing its objective.
+
+Then the given dataset will be prepared and setup. Data cleaning, Visualization and an exploratory data analysis is carried out in order to develop a machine learning model that could predict dataset. Results will be explained. Finally the report ends with some concluding remarks.
+
+
+## Introduction
+
+Heart Disease dataset is a dataset available at UCI. 
+In this project we are going to predict the heart disease by using this data set. It is a multivariate dataset with 303 instance and 14 attributes with Catagorical, Real and integer characteristics.
+This database contains 76 attributes, but all published experiments refer to using a subset of 14 of them. In particular, the Cleveland database is the only one that has been used by ML researchers to this date. The "goal" field refers to the presence of heart disease in the patient. It is integer valued from 0 (no presence) to 4. Experiments with the Cleveland database have concentrated on simply attempting to distinguish presence (values 1,2,3,4) from absence (value 0).
+The names and social security numbers of the patients were recently removed from the database, replaced with dummy values.
+
+One file has been "processed", that one containing the Cleveland database.
+
+In this project we are going to use this file to predict heart disease.
+
+
+## Aim of the Project
+In this project we are dealing with 3 different machine learning algorithms to predict heart disease (angiographic disease status) are compared. For some algorithms, model parameters are tuned and the best model selected. The best results measured by AUC and accuracy are obtained from a logistic regression model (AUC 0.92, Accuracy 0.87),  followed by Gradient Boosting Machines. 
+From a set of 14 variables, the most important to predict heart failure are whether or not there is a reversable defect in Thalassemia followed by whether or not there is an occurrence of asymptomatic chest pain. 
+
+
+## Dataset
+Nicely prepared heart disease data are available at [UCI](https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data). 
+The description of the database can be found [here](https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/heart-disease.names). The document mentions that previous work resulted in an accuracy of 74-77% for the preciction of heart disease using the cleveland data.
+
+Variable name  | Short desciption  | Variable name | Short description
+------------- | ------------- |-------------|------------------------
+age    | Age of patient        |thalach | maximum heart rate achieved
+sex       | Sex, 1 for male  | exang | exercise induced angina (1 yes)
+cp|chest pain | oldpeak | ST depression induc. ex.
+trestbps | resting blood pressure|slope|slope of peak exercise ST
+chol | serum cholesterol| ca | number of major vessel
+fbs|fasting blood sugar larger 120mg/dl (1 true)|thal | no explanation provided, but probably thalassemia (3 normal; 6 fixed defect; 7 reversable defect)
+restecg | resting electroc. result (1 anomality)|num |diagnosis of heart disease  (angiographic disease status)
+
+
+The variable we want to predict is __num__  with Value 0: < 50% diameter narrowing and Value 1: > 50% diameter narrowing. We 
+assume that every value with 0 means heart is okay, and 1,2,3,4 means heart disease.
+
+From the possible values the variables can take, it is evident that the following need to be dummified because the distances in the values is random:
+cp,thal, restecg, slope
+
+Function needed to convert classes of predictor values.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+convert_magic <- function(obj,types){
+    for (i in 1:length(obj)){
+        FUN <- switch(types[i],character = as.character, 
+                                   numeric = as.numeric, 
+                                   factor = as.factor)
+        obj[,i] <- FUN(obj[,i])
+    }
+    obj
+}
+
+```
+This report has been created thanks to an automatised report (R markdown).
+The whole code and work can be found at : 
+https://github.com/DamodharB/MyProject/tree/master/Capstone_Project/
+
+Our work is broken down into several parts :  
+1. Data pre-processing  
+2. Attribute informations  
+3. Data Visualization  
+4. Methods and Analysis   
+  4.1  Data cleaning  
+  4.2  Data analysis  
+  4.3  Modelling Approach  
+
+
+# Data pre-processing
+
+Nicely prepared heart disease data are available at UCI The description of the database can be found here.
+We first import datasets from this site in order to load them as dataframe. Then, we add a header to those dataframes.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+process_data <- function(data_source){
+  data <- read.table(data_source, sep = ',', na = '?', header = FALSE)
+  colnames(data) <- c("age","sex","cp","trestbps","chol","fbs","restecg","thalach","exang","oldpeak","slope","ca","thal","num")
+  return(data)
+}
+
+cleveland_data <- process_data('https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data')
+
+```
+
+Get a quick idea of the data:
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+dim(cleveland_data)
+head(cleveland_data)
+```
+
+# Attribute Informations
+```{r}
+str(cleveland_data)
+```
+
+We have total 303 objects and 14 attributes for the cleveland dataset.
+
+Firstly, all attributes are numerical except num which is an int attribute. It's the goal attribute (the one we are trying to guess), the diagnosis of heart disease. 
+
+We notice that age, trestbps, chol, thalach and oldpeak are continuous variables while other attributes have categorical values (they were in original dataset represented as string categorical values but they were mapped as numerical values to compute more easily).
+
+```{r}
+summary(cleveland_data)
+```
+
+We noticed that ca and thal attributes in cleveland_data dataset having NA values. 
+
+
+# Data visualization
+
+Explore the data quickly, how many had heart attack, women or men, age?
+  
+Values of num > 0 are cases of heart disease. Dummify some variables.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+cleveland_data$num[cleveland_data$num > 0] <- 1
+barplot(table(cleveland_data$num), main="Fate", col="brown")
+```
+
+change a few predictor variables from integer to factors (make dummies).
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+chclass <-c("numeric","factor","factor","numeric","numeric","factor","factor","numeric","factor","numeric","factor","factor","factor","factor")
+
+cleveland_data1 <- convert_magic(cleveland_data,chclass)
+
+heart = cleveland_data1 #add labels only for plot
+levels(heart$num) = c("No disease","Disease")
+levels(heart$sex) = c("female","male","")
+mosaicplot(heart$sex ~ heart$num,
+           main="Fate by Gender", shade=FALSE,color=TRUE,
+           xlab="Gender", ylab="Heart disease")
+
+
+boxplot(heart$age ~ heart$num,
+        main="Fate by Age",
+        ylab="Age",xlab="Heart disease")
+
+```
+
+We install the corrplot package to visualize our correlation matrix easily.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+library(corrplot)
+
+corr_matrix <- function(dataframe, t){
+  df_clean <- na.omit(dataframe)
+  cat("\n")
+  corrplot(cor(df_clean), method = "circle", title = t)
+}
+
+corr_matrix(cleveland_data, "Cleveland correlation matrix visualisation")
+```
+
+For cleveland dataframe we want to replace NA values from 2 discrete attributes, CA and THAL. We can see on the correlation plot that:
+  - CA attibute is mostly correlated to NUM and AGE attribute,
+  - THAL attribute is most strongly correlated to SEX and NUM attributes.
+  
+
+# Methods and Analysis
+## Data cleaning
+
+Missing values in data is a common phenomenon in real world problems. Knowing how to handle missing values effectively is a required step to reduce bias and to produce powerful models. Lets explore various options of how to deal with missing values and how to implement them.
+We can handle the missing data using different techniques depending if there is a lot of unvalued data or not. If not, we can delete NA marked rows or we can replace missing data by the mean of the associated attribute (column) for continuous values. Otherwise, we could use more advanced technical stuff like logistic regression to deduce discretes values (for instance 1, 2, 3 or 4 as possible outputs for one attribute) or linear regressions for continuous values. We will also compute a correlation matrix to know which attributes influence the one where the value is missing so that we could deduce it. We could finally have simply delete those rows but that would have mean losing information (even if it's a small part). 
+
+Check for missing values - only 6 so just remove them.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+s = sum(is.na(cleveland_data))
+cleveland_data_clean <- na.omit(cleveland_data)
+
+cat("CLEVELAND DATAFRAME\n")
+summary(cleveland_data_clean)
+
+```
+
+Now the cleveland dataset is fully cleaned.
+
+
+## Data Analysis
+Once dataframe has been cleaned, we begin first by interpreting how attributes are correlated to num attribute (attribute in which we would like to predict later).
+
+As we have a lot of attributes to analyze, comparing each other by hand will be too long and not efficient. It is better to see how each attribute are linked by using Principal Component Analysis method.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+library(FactoMineR)
+
+cleveland_dataframe = as.data.frame(cleveland_data_clean)
+result = PCA(cleveland_dataframe[,1:14])
+```
+
+As we can see in this correlation circle, it appears that the main attributes that impact on heart disease (num attribute) could be the attributes oldpeak, thal, cp, exang and slope. One attribute is negatively correlated to num which is thalach.
+All the attributes that are correlated (negatively or positively) to Dim 2 are mainly about heart statement.
+The other attributes like age, sex, trestbps, chol, fbs and restecg seems not to be highly correlated to heart disease.
+This time, all the attributes that are correlated to Dim 1 are mainly about blood statement.
+Even if we lost some information, PCA allows us to better understand different attributes and how they can be related.
+
+Now, we will print an histogram so that we can analyze which of these attributes can be correlated to heart disease. But before that, we have to convert categorical values into vector so that we can print their histogram depending on num.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+cleveland_dataframe$num <- as.factor(cleveland_dataframe$num)
+cleveland_dataframe$sex <- as.factor(cleveland_dataframe$sex)
+cleveland_dataframe$cp <- as.factor(cleveland_dataframe$cp)
+cleveland_dataframe$restecg <- as.factor(cleveland_dataframe$restecg)
+cleveland_dataframe$fbs <- as.factor(cleveland_dataframe$fbs)
+cleveland_dataframe$thal <- as.factor(cleveland_dataframe$thal)
+cleveland_dataframe$ca <- as.factor(cleveland_dataframe$ca)
+cleveland_dataframe$slope <- as.factor(cleveland_dataframe$slope)
+
+```
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+create_level <- function(city_categorical_attributes,categorical_attribute,number_of_category){
+  i=0
+  for (i in number_of_category){
+    levels(city_categorical_attributes$categorical_attribute)[levels(city_categorical_attributes$categorical_attribute)==i]
+  }
+}
+
+create_level(cleveland_dataframe,sex,1)
+create_level(cleveland_dataframe,fbs,1)
+create_level(cleveland_dataframe,thal,3)
+create_level(cleveland_dataframe,num,4)
+create_level(cleveland_dataframe,exang,1)
+create_level(cleveland_dataframe,cp,3)
+create_level(cleveland_dataframe,restecg,2)
+create_level(cleveland_dataframe,slope,2)
+
+```
+
+Once each categorical value has been converted into vector, we can plot each attribute :
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+library(ggplot2)
+library(ggthemes)
+
+plot_histogram <- function(city_dataframe, continuous_attribute,title_plot){
+  ggplot(data = city_dataframe,mapping = aes(x = continuous_attribute, fill=num)) + geom_histogram(aes(y=..density..), color="grey17")+
+    facet_wrap(~num, ncol=1,scale="fixed") + ggtitle(title_plot)
+}
+plot_bar <- function(city_dataframe, categorical_attribute,title_plot){
+  ggplot(data = city_dataframe, mapping = aes(x = categorical_attribute)) + geom_bar() + facet_wrap(~num) + ggtitle(title_plot)
+}
+
+plot_histogram(cleveland_dataframe,cleveland_dataframe$trestbps,"trestbps")
+plot_histogram(cleveland_dataframe,cleveland_dataframe$chol,"chol")
+plot_histogram(cleveland_dataframe,cleveland_dataframe$thalach,"thalach")
+plot_histogram(cleveland_dataframe,cleveland_dataframe$oldpeak,"oldpeak")
+plot_histogram(cleveland_dataframe,cleveland_dataframe$age,"age")
+plot_bar(cleveland_dataframe,cleveland_dataframe$sex,"sex")
+plot_bar(cleveland_dataframe,cleveland_dataframe$ca,"ca")
+plot_bar(cleveland_dataframe,cleveland_dataframe$cp,"cp")
+plot_bar(cleveland_dataframe,cleveland_dataframe$exang,"exang")
+plot_bar(cleveland_dataframe,cleveland_dataframe$restecg,"restecg")
+plot_bar(cleveland_dataframe,cleveland_dataframe$fbs,"fbs")
+plot_bar(cleveland_dataframe,cleveland_dataframe$slope,"slope")
+plot_bar(cleveland_dataframe,cleveland_dataframe$thal,"thal")
+
+```
+
+Trestbps : It seems like the more num approch to 4, the more blood pressure increase. If the blood pressure is higher than 120 for certain people, there is higher chance to get a heart disease.
+
+Chol : In this histogram, it seems like cholesterol affect a little bit on heart. Healthy person has their cholesterol around 200 mg/dl, whereas person with num 1,2,3 and 4 has their cholesterol around 250 mg/dl. But these values does not prove that cholesterol is a direct consequence of num.
+
+Thalach : The maximum heart rate achieved is better on healthy person than person with heart disease. We could say that having a low heart rate can affect on heart.
+
+Oldpeak : We can see that the distribution of values tends to shift on the right each time num approach to 4. This histogram shows us that the higher is oldpeak, the more we have chance to get a heart disease.
+
+Age : Persons that have heart disease are mainly aged around 50 to 60 years old.
+
+Sex : In Cleveland, people who are mainly touched by heart diseases are men.
+
+ca : We can see that almost all healthy person has no vessels, but this does not mean so far that having 1 or 3 vessels can lead to heart disease. In fact, we can see that healthy person have also 1 to 3 vessels, so we can't say nothing.
+
+cp : Most of the person with heart disease has the asymptomatic chest pain, which may be the main factor of heart disease.
+
+exang : We can say that exercise induced angina is higher for those who have heart disease. Compared with healthy people, there is few people who's been affected to angina, but there is a huge proportion of people with no angina after exercise.
+We can say that exang is one of the factor that cause heart disease as well.
+
+restcg : The proportion of normal rest electrocardiogram result seems to be obvious from healthy people, but we can also see that there is a huge proportion of healthy people that has a left ventricular hypertrophy. Compared with those
+who have heart disease, we can't say nothing about the correlation between restcg and num.
+
+fbs : Fast blood sugar seems not to be correlated to num. In fact, the proportion of fast blood sugar either > 120 or < 120 is the same for every num, so we can't say nothing too.
+
+slope : Majority of healthy people have a upsloping peak exercise. On the opposite, majority people with heart disease has a flat peak exercise. So we could say that, having a flat slope peak exercise can induce to a heart disease.
+
+thal : From the healthy person, majority of them have a normal thal. Compared to people with heart disease, most of them have a reversable thal which could be the cause of a heart disease.
+
+To sum up, people from Cleveland are touched by heart disease around the age of 50-60. Most of them are men, and the cause of heart disease comes from several factor : a reversable thal, a flat slope, people that get angina and has an asymptomatic chest pain during exercise and a low heart rate achieved are the consequences of heart disease.
+
+
+
+## Modelling Approach
+
+### Training and Testing data for validation
+Split the data into Training (70%) and Testing (30%) data. Percentage of heart disease or not must be same in training and testing (which is handled by the R-library used here).
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+library(caret)
+set.seed(10, sample.kind="Rounding")
+cleveland_data_clean <- convert_magic(cleveland_data_clean,chclass)
+inTrainRows <- createDataPartition(cleveland_data_clean$num,p=0.7,list=FALSE)
+trainData <- cleveland_data_clean[inTrainRows,]
+testData <-  cleveland_data_clean[-inTrainRows,]
+nrow(trainData)/(nrow(testData)+nrow(trainData)) #checking whether really 70% -> OK
+
+```
+
+### Predict with different methods with different tuning parameters and compare best model of each method
+
+Results are going to be stored in variable AUC. AUC is the area under the ROC which represents the proportion of positive data points that are correctly considered as positive and the proportion of negative data points that are mistakenly considered as positive. We also store Accuracy which is true positive and true negative divided by all results.
+
+```{r}
+AUC = list()
+Accuracy = list()
+```
+
+#### Logistic regression
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(10, sample.kind="Rounding")
+logRegModel <- train(num ~ ., data=trainData, method = 'glm', family = 'binomial')
+logRegPrediction <- predict(logRegModel, testData)
+logRegPredictionprob <- predict(logRegModel, testData, type='prob')[2]
+logRegConfMat <- confusionMatrix(logRegPrediction, testData[,"num"])
+
+#ROC Curve
+library(pROC)
+AUC$logReg <- roc(as.numeric(testData$num),as.numeric(as.matrix((logRegPredictionprob))))$auc
+Accuracy$logReg <- logRegConfMat$overall['Accuracy']
+
+row.names <- names(Accuracy)
+col.names <- c("AUC", "Accuracy")
+cbind(as.data.frame(matrix(c(AUC,Accuracy),nrow = 1, ncol = 2,
+                           dimnames = list(row.names, col.names))))
+
+```
+
+The accuracy is 0.87 and AUC 0.92 which is already quite good.
+
+#### Random Forest model without tuning (but checked a few number of trees)
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+library(randomForest)
+set.seed(10, sample.kind="Rounding")
+RFModel <- randomForest(num ~ .,
+                        data=trainData,
+                        importance=TRUE,
+                        ntree=2000)
+#varImpPlot(RFModel)
+RFPrediction <- predict(RFModel, testData)
+RFPredictionprob = predict(RFModel,testData,type="prob")[, 2]
+
+RFConfMat <- confusionMatrix(RFPrediction, testData[,"num"])
+
+AUC$RF <- roc(as.numeric(testData$num),as.numeric(as.matrix((RFPredictionprob))))$auc
+Accuracy$RF <- RFConfMat$overall['Accuracy']
+
+row.names <- names(Accuracy)
+col.names <- c("AUC", "Accuracy")
+cbind(as.data.frame(matrix(c(AUC,Accuracy),nrow = 2, ncol = 2,
+                           dimnames = list(row.names, col.names))))
+
+```
+
+#### Boosted tree model with tuning (grid search)
+Boosted tree model (gbm) with adjusting learning rate and and trees.
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+library(caret)
+library(gbm)
+set.seed(10, sample.kind="Rounding")
+objControl <- trainControl(method='cv', number=10)
+gbmGrid <-  expand.grid(interaction.depth =  c(1, 5, 9),
+                        n.trees = (1:30)*50,
+                        shrinkage = 0.1,
+                        n.minobsinnode =10)
+# run model
+boostModel <- train(num ~ .,data=trainData, method='gbm',
+                    trControl=objControl, tuneGrid = gbmGrid, verbose=F)
+
+# See model output in Appendix to get an idea how it selects best model
+boostPrediction <- predict(boostModel, testData)
+boostPredictionprob <- predict(boostModel, testData, type='prob')[2]
+boostConfMat <- confusionMatrix(boostPrediction, testData[,"num"])
+
+#ROC Curve
+AUC$boost <- roc(as.numeric(testData$num),as.numeric(as.matrix((boostPredictionprob))))$auc
+Accuracy$boost <- boostConfMat$overall['Accuracy']
+
+row.names <- names(Accuracy)
+col.names <- c("AUC", "Accuracy")
+cbind(as.data.frame(matrix(c(AUC,Accuracy),nrow = 3, ncol = 2,
+                           dimnames = list(row.names, col.names))))
+
+```
+
+# Results 
+## Comparison of AUC and Accuracy between models
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+row.names <- names(Accuracy)
+col.names <- c("AUC", "Accuracy")
+cbind(as.data.frame(matrix(c(AUC,Accuracy),nrow = 3, ncol = 2,
+                           dimnames = list(row.names, col.names))))
+
+```
+
+The best model is the relative simple logistic regression model with an Area under the ROC of 0.92. We can predict heart disease with an accuracy of 0.87. The Sensitivity is 0.90 and the Specificity 0.83.
+
+
+## Interpretation of logistic regression model and importance of variables from boosted tree
+
+The coefficients of the 'best' model given AUC and Accuracy, the logistic regression model, are the following:
+
+```{r}
+summary(logRegModel)$coeff
+```
+
+The interpretation of the coefficient for sex, for example, is: If all predictors are held at a fixed value, the odds of getting heart disease for males (males = 1) over the odds of getting heart disease for females is exp(1.85291093) = 6.4 i.e. the odds are 540% higher.
+
+A direct comparison of the importance of each predictor is not possible for the logistic regression model. But this could be added in further analyses - comparing predictive ability of model by removing each variable seperately. Since the boosted tree model was only slightly lower, I here show the importance of the variables calculated by the boosted tree.
+```{r}
+boostImp =varImp(boostModel, scale = FALSE)
+plot(boostImp,main = 'Variable importance for heart failure prediction with boosted tree')
+
+```
+
+# Conclusion
+14 predictor variables from the UCI heart disease dataset are used to predict the diagnosis of heart disease (angiographic disease status). The performances of 3 different machine learning algorithms - logistic regression, boosted trees, random forest and support vector machines - are compared .
+70% of the data is hold out as a training data set that is not seen during the testing stage of the data. 30% of the data is hold out as a testing data set that is not seen during the training stage of the data. 
+A comparison of the area under the ROC and the accuracy of the model predictions shows that logistic regression performs best (accuracy of 0.87). Tree-based methods with different tuning parameters performed slightly worse.
+Nevertheless, the boosted tree model was used to compare the importance of the different variables due to the easier procedure compared to logistic regression.
+The short analysis shows the predictive capability of machine learning algorithms for heart diseases.
+
+
+# Appendix
+
+## Confusion matrix output
+
+### Logistic Regression:
+
+```{r}
+logRegConfMat
+```
+
+
+
+### Random Forest:
+
+```{r}
+RFConfMat
+```
+
+
+
+### Boosted Tree:
+
+```{r}
+boostConfMat
+```
+
+## Example of Model output for selection of tuning parameters
+```{r}
+boostModel
+```
+
+## Environment
+
+```{r}
+print("Operating System:")
+
+version
+```
+
