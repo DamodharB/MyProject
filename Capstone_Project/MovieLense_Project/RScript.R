@@ -11,9 +11,9 @@
 
 ## Dataset ##
 
-################################
-# Create edx set, validation set
-################################
+##########################################################
+# Create edx set, validation set (final hold-out test set)
+##########################################################
 
 # Note: this process could take a couple of minutes
 
@@ -33,14 +33,22 @@ ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings
 
 movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
 colnames(movies) <- c("movieId", "title", "genres")
+
+# if using R 3.6 or earlier
 movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
                                            title = as.character(title),
                                            genres = as.character(genres))
+
+# if using R 4.0 or later
+#movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+#                                           title = as.character(title),
+#                                           genres = as.character(genres))
 
 movielens <- left_join(ratings, movies, by = "movieId")
 
 # Validation set will be 10% of MovieLens data
 set.seed(1, sample.kind="Rounding")
+# if using R 3.5 or earlier, use `set.seed(1)` instead
 
 test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
 edx <- movielens[-test_index,]
@@ -65,7 +73,7 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 head(edx) %>%
   print.data.frame()
 
-# Total unique movies and users
+# Summarise data
 summary(edx)
 
 # Number of unique movies and users in the edx dataset 
@@ -77,7 +85,7 @@ edx %>%
 edx %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.25, color = "black") +
-  scale_x_discrete(limits = c(seq(0.5,5,0.5))) +
+  scale_x_discrete(limits = c(seq(0.5,5))) +
   scale_y_continuous(breaks = c(seq(0, 3000000, 500000))) +
   ggtitle("Rating distribution")
 
@@ -124,13 +132,18 @@ edx %>%
   xlab("Mean rating") +
   ylab("Number of users") +
   ggtitle("Mean movie ratings given by users") +
-  scale_x_discrete(limits = c(seq(0.5,5,0.5))) +
+  scale_x_discrete(limits = c(seq(0.5,5))) +
   theme_light()
 
 
 ### Modelling Approach ###
 
 ## Average movie rating model ##
+
+#Define RMSE Function
+RMSE <- function(true_ratings, predicted_ratings){
+  sqrt(mean((true_ratings - predicted_ratings)^2))
+}
 
 # Compute the dataset's mean rating
 mu <- mean(edx$rating)
@@ -171,7 +184,7 @@ rmse_results %>% knitr::kable()
 
 ## Movie and user effect model ##
 
-# Plot penaly term user effect #
+# Plot penalty term user effect #
 user_avgs<- edx %>% 
   left_join(movie_avgs, by='movieId') %>%
   group_by(userId) %>%

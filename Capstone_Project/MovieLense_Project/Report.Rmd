@@ -1,13 +1,15 @@
 ---
 title: "HarvardX: PH125.9x Data Science  \n   MovieLens Rating Prediction Project"
 author: "Battula Damodhar"
-date: "June 18, 2020"
+date: "July 20, 2020"
 output:
   pdf_document:
     toc: true
     toc_depth: 3
     number_sections: true
 ---
+
+\pagebreak
 
 
 # Overview
@@ -30,7 +32,7 @@ For this project we will focus on create a movie recommendation system using the
 
 The aim of this project is to train a machine learning algorithm that predicts user ratings (from 0.5 to 5 stars) using the inputs of a provided subset (edx dataset provided by the staff) to predict movie ratings in a provided validation set.
 
-The value used to evaluate algorithm performance is the Root Mean Square Error, or RMSE. RMSE is one of the most used measure of the differences between values predicted by a model and the values observed. RMSE is a measure of accuracy, to compare forecasting errors of different models for a particular dataset, a lower RMSE is better than a higher one. The effect of each error on RMSE is proportional to the size of the squared error; thus larger errors have a disproportionately large effect on RMSE. Consequently, RMSE is sensitive to outliers.
+The value used to evaluate algorithm performance is the Root Mean Square Error or RMSE. RMSE is one of the most used measure of the differences between values predicted by a model and the values observed. RMSE is a measure of accuracy, to compare forecasting errors of different models for a particular dataset, a lower RMSE is better than a higher one. The effect of each error on RMSE is proportional to the size of the squared error: thus larger errors have a disproportionately large effect on RMSE. Consequently, RMSE is sensitive to outliers.
 Four models that will be developed will be compared using their resulting RMSE in order to assess their quality. The evaluation criteria for this algorithm is a RMSE expected to be lower than 0.8775.
 The function that computes the RMSE for vectors of ratings and their corresponding predictors will be the following:
 $$ RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{u,i} (\hat{y}_{u,i}-y_{u,i})^{2}} $$
@@ -58,10 +60,11 @@ The MovieLens dataset is automatically downloaded
 
 ```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
 
-###################################
-# Create edx set, validation set
-###################################
+##########################################################
+# Create edx set, validation set (final hold-out test set)
+##########################################################
 # Note: this process could take a couple of minutes
+
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
@@ -74,6 +77,8 @@ ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings
 
 movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
 colnames(movies) <- c("movieId", "title", "genres")
+
+# using R 3.6
 movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
                                             title = as.character(title),
                                             genres = as.character(genres))
@@ -82,12 +87,13 @@ movielens <- left_join(ratings, movies, by = "movieId")
 
 ```
 
-In order to predict in the most possible accurate way the movie rating of the users that haven’t seen the movie yet, the he MovieLens dataset will be splitted into 2 subsets that will be the “edx”, a training subset to train the algorithm, and “validation” a subset to test the movie ratings.  
+In order to predict the most possible accurate way the movie rating of the users that haven’t seen the movie yet, the MovieLens dataset will be splitted into 2 subsets that will be the “edx”, a training subset to train the algorithm and “validation” a subset to test the movie ratings.  
 
 ```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
 
 # Validation set will be 10% of the MovieLens data.
 set.seed(1, sample.kind="Rounding")
+# if using R 3.5 or earlier, use `set.seed(1)` instead
 test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
 edx <- movielens[-test_index,]
 temp <- movielens[test_index,]
@@ -105,7 +111,7 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
 ```
 
-Algorithm development is to be carried out on the "edx" set only, as "validation" set will be used to test the final algorithm.
+Algorithm development is to be carried out on the "edx" set only as "validation" set will be used to test the final algorithm.
 \pagebreak
 
 
@@ -114,50 +120,58 @@ Algorithm development is to be carried out on the "edx" set only, as "validation
 
 ## Data Analysis
 
-To get familiar with the dataset, we find the first rows of "edx" set as below.
-The set contain the six variables “userID”, “movieID”, “rating”, “timestamp”, “title”, and “genres”. Each row represent a single rating of a user for a single movie.
+To get familiar with the dataset, we head the first few rows of "edx" data set.
 
-```{r head, echo = FALSE}
+```{r head, echo = TRUE}
 
 head(edx) %>%
   print.data.frame()
   
 ```
 
-A summary of the set confirms that there are no missing values.
+The set contain the six variables “userID”, “movieID”, “rating”, “timestamp”, “title”, and “genres”. Each row represent a single rating of a user for a single movie.
 
-```{r summary, echo = FALSE}
+
+Now we will summarise the edx data set.
+
+```{r summary, echo = TRUE}
 
 summary(edx)
 
 ```
 
-The total of unique movies and users in the edx set is about 70.000 unique users and about 10.700 different movies:
+Summary of the set confirms that there are no missing values.
 
-```{r, echo = FALSE}
+
+Now Summarise the unique users and movies:
+
+```{r, echo = TRUE}
 edx %>%
 summarize(n_users = n_distinct(userId), 
           n_movies = n_distinct(movieId))
 ```
 
-Users have a preference to rate movies rather higher than lower as shown by the distribution of ratings below. 4 is the most common rating, followed by 3 and 5. 0.5 is the least common rating. In general, half rating are less common than whole star ratings.
+The total number of unique movies and users in the edx set is 69878 (about 70.000) unique users and 10677 (about 10.700) different movies.
 
-```{r rating_distribution, echo = FALSE}
+
+Users have a preference to rate movies rather higher than lower as shown by the distribution of ratings below:
+
+```{r rating_distribution, echo = TRUE, fig.height=4, fig.width=5}
 
 edx %>%
   ggplot(aes(rating)) +
   geom_histogram(binwidth = 0.25, color = "black") +
-  scale_x_discrete(limits = c(seq(0.5,5,0.5))) +
+  scale_x_discrete(limits = c(seq(0.5,5))) +
   scale_y_continuous(breaks = c(seq(0, 3000000, 500000))) +
   ggtitle("Rating distribution")
   
 ```
 
+We can see 4 is the most common rating, followed by 3 and 5. 0.5 is the least common rating. In general, half ratings are less common than whole star ratings.
 
 We can observe that some movies have been rated much often than other, while some have very few ratings and sometimes only one rating. This will be important for our model as very low rating numbers might results in untrustworthy estimate for our predictions. In fact 125 movies have been rated only once. 
 
-Thus regularisation and a penalty term will be applied to the models in this project. Regularizations are techniques used to reduce the error by fitting a function appropriately on the given training set and avoid overfitting (the production of an analysis that corresponds too closely or exactly to a particular set of data, and may therefore fail to fit additional data or predict future observations reliably). Regularization is a technique used for tuning the function by adding an additional penalty term in the error function. The additional term controls the excessively fluctuating function such that the coefficients don’t take extreme values.
-
+Thus regularisation and a penalty term will be applied to the models in this project. Regularizations are techniques used to reduce the error by fitting a function appropriately on the given training set and avoid overfitting (the production of an analysis that corresponds too closely or exactly to a particular set of data, and may therefore fail to fit additional data or to predict future observations reliably). Regularization is a technique used for tuning the function by adding an additional penalty term in the error function. The additional term controls the excessively fluctuating function such that the coefficients don’t take extreme values.
 
 ```{r number_of_ratings_per_movie, echo = TRUE, fig.height=4, fig.width=5}
 
@@ -174,7 +188,6 @@ ggtitle("Number of ratings per movie")
 
 
 As 20 movies that were rated only once appear to be obscure, predictions of future ratings for them will be difficult.
-
 
 ```{r obscure_movies, echo = TRUE, fig.height=4, fig.width=5}
 
@@ -208,7 +221,7 @@ ggtitle("Number of ratings given by users")
 ```
 
 
-Furthermore, users differ vastly in how critical they are with their ratings. Some users tend to give much lower star ratings and some users tend to give higher star ratings than average. The visualization below includes only users that have rated at least 100 movies.
+Furthermore, users differ vastly in how critical they are with their ratings. Some users tends to give much lower star ratings and some users tends to give higher star ratings than average. The visualization below includes only users that have rated atleast 100 movies.
 
 
 ```{r Mean_movie_ratings_given_by_users, echo = TRUE, fig.height=4, fig.width=5}
@@ -222,7 +235,7 @@ edx %>%
   xlab("Mean rating") +
   ylab("Number of users") +
   ggtitle("Mean movie ratings given by users") +
-  scale_x_discrete(limits = c(seq(0.5,5,0.5))) +
+  scale_x_discrete(limits = c(seq(0.5,5))) +
   theme_light()
   
 ```
@@ -230,14 +243,14 @@ edx %>%
 
 ## Modelling Approach
 
-We write now the loss-function, previously anticipated, that compute the RMSE, defined as follows:
+Now we write the loss-function, previously anticipated, that compute the RMSE, defined as follows:
 
 $$ RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{u,i} (\hat{y}_{u,i}-y_{u,i})^{2}} $$
 
 
-with N being the number of user/movie combinations and the sum occurring over all these combinations.
+with N being the number of user/movie combinations and the sum occurring overall these combinations.
 The RMSE is our measure of model accuracy.
-We can interpret the RMSE similarly to a standard deviation: it is the typical error we make when predicting a movie rating. If its result is larger than 1, it means that our typical error is larger than one star, which is not a good result.
+We can interpret the RMSE similarly to a standard deviation: it is a typical error we make when predicting a movie rating. If its result is larger than 1, it means that our typical error is larger than one star, which is not a good result.
 The written function to compute the RMSE for vectors of ratings and their corresponding predictions is:
 
 
@@ -249,13 +262,13 @@ RMSE <- function(true_ratings, predicted_ratings){
 
 ```
 
-The lower the better, as said previously.
+As said earlier, lower RMSE is the best one.
 
 
-### I. Average movie rating model
+### Average movie rating model
 
 The first basic model predicts the same rating for all movies, so we compute the dataset’s mean rating. The expected rating of the underlying data set is between 3 and 4.
-We start by building the simplest possible recommender system by predicting the same rating for all movies regardless of user who give it. A model based approach assumes the same rating for all movie with all differences explained by random variation :
+We start by building the simplest possible recommendation system by predicting the same rating for all movies regardless of user who give it. A model based approach assumes the same rating for all movies with all differences explained by random variation :
 $$ Y_{u, i} = \mu + \epsilon_{u, i} $$
 with $\epsilon_{u,i}$ independent error sample from the same distribution centered at 0 and $\mu$ the “true” rating for all movies. This very simple model makes the assumption that all differences in movie ratings are explained by random variation alone. We know that the estimate that minimize the RMSE is the least square estimate of $Y_{u,i}$ , in this case, is the average of all ratings:
 The expected rating of the underlying data set is between 3 and 4.
@@ -280,7 +293,7 @@ naive_rmse
 
 Here, we represent results table with the first RMSE:
 
-```{r rmse_results1, echo = TRUE}
+```{r rmse_results1, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
 
 rmse_results <- data_frame(method = "Average movie rating model", RMSE = naive_rmse)
 rmse_results %>% knitr::kable()
@@ -292,7 +305,7 @@ This give us our baseline RMSE to compare with next modelling approaches.
 In order to do better than simply predicting the average rating, we incorporate some of insights we gained during the exploratory data analysis.
 
 
-### II.  Movie effect model
+### Movie effect model
 
 To improve above model we focus on the fact that, from experience, we know that some movies are just generally rated higher than others. Higher ratings are mostly linked to popular movies among users and the opposite is true for unpopular movies. We compute the estimated deviation of each movies’ mean rating from the total mean of all movies $\mu$. The resulting variable is called "b" ( as bias ) for each movie "i" $b_{i}$, that represents average ranking for movie $i$:
 $$Y_{u, i} = \mu +b_{i}+ \epsilon_{u, i}$$
@@ -334,7 +347,7 @@ So we have predicted movie rating based on the fact that movies are rated differ
 We can see an improvement but this model does not consider the individual user rating effect.
 
 
-### III. Movie and user effect model
+### Movie and user effect model
 
 We compute the average rating for user $\mu$, for those that have rated over 100 movies, said penalty term user effect. In fact users affect the ratings positively or negatively.
 ```{r, echo = TRUE}
@@ -382,13 +395,13 @@ rmse_results %>% knitr::kable()
 ```
 
 
-Our rating predictions further reduced the RMSE. But we made stil mistakes on our first model (using only movies). The supposes “best “ and “worst “movie were rated by few users, in most cases just one user. These movies were mostly obscure ones. This is because with a few users, we have more uncertainty. Therefore larger estimates of $b_{i}$, negative or positive, are more likely.
+Our rating predictions further reduced the RMSE. But we made mistakes on our first model (using only movies). The supposes “best “ and “worst “movie were rated by few users, in most cases just one user. These movies were mostly obscure ones. This is because with a few users, we have more uncertainty. Therefore larger estimates of $b_{i}$, negative or positive, are more likely.
 Large errors can increase our RMSE. 
 
 Until now, we computed standard error and constructed confidence intervals to account for different levels of uncertainty. However, when making predictions, we need one number, one prediction, not an interval. For this we introduce the concept of regularization, that permits to penalize large estimates that come from small sample sizes. The general idea is to add a penalty for large values of $b_{i}$ to the sum of squares equation that we minimize. So having many large $b_{i}$, make it harder to minimize. Regularization is a method used to reduce the effect of overfitting.
 
 
-### IV. Regularized movie and user effect model
+### Regularized movie and user effect model
 
 So estimates of $b_{i}$ and $b_{u}$ are caused by movies with very few ratings and in some users that only rated a very small number of movies. Hence this can strongly influence the prediction. The use of the regularization permits to penalize these aspects. We should find the value of lambda (that is a tuning parameter) that will minimize the RMSE. This shrinks the $b_{i}$ and $b_{u}$ in case of small number of ratings.
 
@@ -431,19 +444,20 @@ qplot(lambdas, rmses)
 
 ```
 
+
 For the full model, the optimal lambda is:
 
 ```{r min_lambda, echo = TRUE}
 
-  lambda <- lambdas[which.min(rmses)]
+lambda <- lambdas[which.min(rmses)]
 lambda
 
 ```
 
 For the full model, the optimal lambda is: 5.25
 
-The new results will be:
 
+The new results will be:
 
 ```{r rmse_results2, echo = TRUE}
 
