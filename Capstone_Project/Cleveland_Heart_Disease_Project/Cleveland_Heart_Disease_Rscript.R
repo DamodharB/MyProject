@@ -17,9 +17,8 @@ if(!require(e1071)) install.packages("e1071", repos = "http://cran.us.r-project.
 # https://archive.ics.uci.edu/ml/datasets/Heart+Disease
 
 #Reading data in CSV format as dataframe
-heart_disease_dataset <- read.csv(file = 
-                                    'https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data',
-                                  sep = ',', na = '?', header = F)
+url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data'
+heart_disease_dataset <- read.csv(file = url, sep = ',', na = '?', header = F)
 
 #Prepare column names
 column_names <- c("Age",
